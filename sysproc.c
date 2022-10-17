@@ -15,7 +15,11 @@ int sys_fork(void)
 int sys_exit(void)
 {
   int status;
-  argint(0, &status);
+  if (argint(0, &status) < 0)
+  {
+    return -1;
+  }
+
   exit(status);
   return 0; // not reached
 }
@@ -31,6 +35,17 @@ int sys_wait(void)
   return wait(status);
 }
 
+int sys_waitpid(void)
+{
+  int *status;
+  int pid, options;
+
+  if (argint(0, &pid) < 0 || argint(2, &options) < 0 || argptr(1, (void *)&status, sizeof(status)) < 0) // changed this part
+  {
+    return -1;
+  }
+  return waitpid(pid, status, options);
+}
 int sys_kill(void)
 {
   int pid;
@@ -90,4 +105,10 @@ int sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+int sys_hello(void)
+{
+  hello();
+  return 0;
 }

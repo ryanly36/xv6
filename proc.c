@@ -269,6 +269,7 @@ void exit(int status)
     }
   }
 
+  curproc->status = status; // return exit status for child process
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
   sched();
@@ -296,6 +297,7 @@ int wait(int *status)
       if (p->state == ZOMBIE)
       {
         // Found one.
+        *status = p->status;
         pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
@@ -305,6 +307,7 @@ int wait(int *status)
         p->name[0] = 0;
         p->killed = 0;
         p->state = UNUSED;
+        p->status = 0;
         release(&ptable.lock);
         return pid;
       }
@@ -321,7 +324,58 @@ int wait(int *status)
     sleep(curproc, &ptable.lock); // DOC: wait-sleep
   }
 }
+int waitpid(int pid, int *status, int options) // edit this part check for test
+{
+  struct proc *p;
+  int pidfound, rpid;
+  struct proc *curproc = myproc();
 
+  acquire(&ptable.lock);
+  for (;;)
+  {
+    // Scan through table looking for process with ID = pid
+    pidfound = 0;
+    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+    {
+      // if(p->parent != curproc)
+      if (p->pid != pid)
+        continue;
+      pidfound = 1;
+      if (p->state == ZOMBIE)
+      {
+        // Found one.
+        *status = p->status;
+        rpid = p->pid;
+        kfree(p->kstack);
+        p->kstack = 0;
+        freevm(p->pgdir);
+        p->pid = 0;
+        p->parent = 0;
+        p->name[0] = 0;
+        p->killed = 0;
+        p->state = UNUSED;
+        p->status = 0;
+        release(&ptable.lock);
+        return rpid;
+      }
+    }
+
+    // No point waiting if we don't have any children.
+    if (!pidfound || curproc->killed)
+    {
+      release(&ptable.lock);
+      return -1;
+    }
+
+    // Wait for children to exit.  (See wakeup1 call in proc_exit.)
+    sleep(curproc, &ptable.lock); // DOC: wait-sleep
+  }
+}
+
+void hello(void)
+{
+  cprintf("\n\n Hello from your kernel space!\n\n");
+}
 // PAGEBREAK: 42
 //  Per-CPU process scheduler.
 //  Each CPU calls scheduler() after setting itself up.
